@@ -10,7 +10,7 @@ A modular Python tool that reads capture files (`.pcap` / `.pcapng`), analyzes t
 
 | Module | What it does |
 |---|---|
-| `parser.py` | Turns a pcap into a pandas DataFrame using Scapy. It pulls out source and destination IPs, ports, TCP flags and packet size. It groups packets by protocol (TCP, UDP, ICMP, DNS, ARP, OTHER) and sorts them into size classes (Small < 64 B, Medium, Large, Jumbo). |
+| `parser.py` | Turns a pcap into a pandas DataFrame using Scapy. It also pulls out source and destination IPs, ports, TCP flags and packet size. It groups packets by protocol (TCP, UDP, ICMP, DNS, ARP, OTHER) and sorts them into size classes (Small < 64 B, Medium, Large, Jumbo). |
 | `stats.py` | Protocol share (%), Top 10 source and destination IPs, packet counts per IP pair, total bytes, size statistics and a traffic timeline. |
 | `detectors.py` | `detect_port_scan(ip, ports)` uses a sliding time window. `detect_rate_spike(avg_rate, ...)` flags bursts. A heavy-talker check flags hosts that send a large share of all packets. |
 | `report.py` | Writes a summary CSV and one CSV per table. It draws Matplotlib charts (PNG) and builds a self-contained HTML report with a **Security Alerts** section. |
