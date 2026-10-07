@@ -234,7 +234,7 @@ All thresholds are in `config.py`.
 * `eth_test.pcap`: about 260 packets of normal Ethernet traffic (HTTPS sessions, DNS lookups, ping, one ARP). It is expected to produce **no alerts**.
 * `traffic.pcap`: about 6,400 packets over 120 seconds. Normal background traffic plus a SYN scan of 400 ports from `192.0.2.66` (starting at +40 s) and a 2-second UDP flood from `192.0.2.99` (starting at +90 s). It is expected to produce **port scan** and **rate spike** alerts.
 
-You can drop your own `.pcap` / `.pcapng` files into `samples/` and run `python analyzer.py batch`.
+You can drop your own `.pcap` / `.pcapng` files into `samples/` and run `python analyzer.py batch`.HELLO
 
 ---
 
@@ -243,5 +243,6 @@ You can drop your own `.pcap` / `.pcapng` files into `samples/` and run `python 
 * Python 3.9 includes an old built-in module named `parser`. `analyzer.py` loads the project's own `parser.py` by file path so the two can't be mixed up. Always run the tool through `analyzer.py`.
 * Very large captures are read packet by packet, but every packet is still kept in memory as a DataFrame row. Use `--max-packets` to analyze only part of a large file.
 * Sizes are on-the-wire lengths (`wirelen` if the file records it, otherwise the captured length).
-#   t r a f f i c - a n a l y z e r  
+#   t r a f f i c - a n a l y z e r 
+ 
  
