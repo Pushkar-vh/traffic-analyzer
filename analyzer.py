@@ -5,8 +5,10 @@ Usage examples::
     python analyzer.py analyze samples/traffic.pcap report.csv
     python analyzer.py analyze samples/eth_test.pcap report.csv --no-html
     python analyzer.py batch
+    python analyzer.py live --timeout 60           # live capture + analysis
 
-Only local capture files are read; the tool never sniffs a live network.
+``analyze`` and ``batch`` only read local files. ``live`` reads packets from
+a network interface via sniffer.py (needs Npcap/admin or root rights).
 """
 
 import argparse
@@ -70,7 +72,25 @@ def build_arg_parser():
     batch.add_argument("--samples-dir", type=Path, default=config.SAMPLES_DIR,
                        help="Directory with captures (default: samples/).")
     _add_common_options(batch)
+
+    live = commands.add_parser(
+        "live", help="Read live packets, save a .pcap, then analyze it.")
+    live.add_argument("report", type=Path, nargs="?", default=None,
+                      help="Summary CSV path "
+                           "(default: <capture name>_report.csv).")
+    live.add_argument("--html", type=Path, default=None,
+                      help="HTML report path (default: next to the CSV).")
+    live.add_argument("--no-analyze", action="store_true",
+                      help="Only capture and save; skip the analysis.")
+    _add_capture_options(live)
+    _add_common_options(live)
     return arg_parser
+
+
+def _add_capture_options(sub_parser):
+    """Live-capture options, defined in sniffer.py (imported lazily)."""
+    import sniffer
+    sniffer.add_capture_arguments(sub_parser)
 
 
 def _add_common_options(sub_parser):
@@ -217,10 +237,33 @@ def run_batch(args):
     return 1 if failures else 0
 
 
+def run_live(args):
+    """Capture live packets with sniffer.py, then analyze the saved file."""
+    import sniffer
+    if args.no_save and not args.no_analyze:
+        LOGGER.warning("--no-save given: packets are only printed, "
+                       "no analysis is possible.")
+    try:
+        result = sniffer.capture_from_args(args)
+    except PermissionError as exc:
+        LOGGER.error("%s", exc)
+        return 2
+    sniffer.print_result(result)
+
+    capture_file = result["output_file"]
+    if args.no_analyze or not capture_file:
+        return 0
+    report_arg = args.report or Path(f"{Path(capture_file).stem}_report.csv")
+    csv_path, html_path = resolve_report_paths(
+        report_arg, args.html, args.output_dir, args.no_html)
+    analyze_file(capture_file, csv_path, html_path, args)
+    return 0
+
+
 def main(argv=None):
     args = build_arg_parser().parse_args(argv)
     configure_logging(args.output_dir, args.verbose)
-    handlers = {"analyze": run_analyze, "batch": run_batch}
+    handlers = {"analyze": run_analyze, "batch": run_batch, "live": run_live}
     try:
         return handlers[args.command](args)
     except (FileNotFoundError, pcap_parser.PcapParseError) as exc:

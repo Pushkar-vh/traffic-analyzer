@@ -8,6 +8,7 @@ HTML report that can be opened offline in any browser.
 import base64
 import csv
 import html
+import io
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,8 +31,8 @@ ALERT_COLOR = "#c53030"
 # --------------------------------------------------------------------------
 # CSV output
 # --------------------------------------------------------------------------
-def write_summary_csv(csv_path, stats, alerts):
-    """Write the one-file summary table (protocols, top IPs, sizes, alerts)."""
+def build_summary_rows(stats, alerts):
+    """Rows of the summary table (protocols, top IPs, sizes, alerts)."""
     rows = _overview_rows(stats)
     rows += _protocol_rows(stats["protocols"])
     rows += _ip_rows("top_source", stats["top_sources"])
@@ -39,7 +40,21 @@ def write_summary_csv(csv_path, stats, alerts):
     rows += _pair_rows(stats["ip_pairs"])
     rows += _size_rows(stats["size_classes"], stats["size_stats"])
     rows += _alert_rows(alerts)
-    _write_rows(csv_path, rows)
+    return rows
+
+
+def summary_csv_text(stats, alerts):
+    """Summary table as CSV text (used for in-memory downloads)."""
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(build_summary_rows(stats, alerts))
+    return buffer.getvalue()
+
+
+def write_summary_csv(csv_path, stats, alerts):
+    """Write the one-file summary table to ``csv_path``."""
+    _write_rows(csv_path, build_summary_rows(stats, alerts))
     LOGGER.info("Summary CSV written to %s", csv_path)
     return Path(csv_path)
 
@@ -169,7 +184,7 @@ def generate_charts(output_dir, prefix, stats):
     return paths
 
 
-def plot_protocol_distribution(table, path):
+def plot_protocol_distribution(table, path=None):
     """Bar chart of packets per protocol, annotated with percentages."""
     fig, axis = plt.subplots(figsize=(8, 4.5))
     bars = axis.bar(table["protocol"], table["packets"], color=BAR_COLOR)
@@ -180,10 +195,10 @@ def plot_protocol_distribution(table, path):
     axis.set_title("Protocol Distribution")
     axis.set_xlabel("Protocol")
     axis.set_ylabel("Packets")
-    _save(fig, path)
+    return _finish(fig, path)
 
 
-def plot_top_talkers(stats, path):
+def plot_top_talkers(stats, path=None):
     """Side-by-side horizontal bars for top sources and destinations."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     panels = (("Top Source IPs", stats["top_sources"]),
@@ -194,24 +209,24 @@ def plot_top_talkers(stats, path):
         axis.set_title(title)
         axis.set_xlabel("Packets")
         axis.tick_params(axis="y", labelsize=8)
-    _save(fig, path)
+    return _finish(fig, path)
 
 
-def plot_size_classes(table, path):
+def plot_size_classes(table, path=None):
     """Packets per size class with total bytes annotated on each bar."""
     fig, axis = plt.subplots(figsize=(8, 4.5))
     bars = axis.bar(table["size_class"], table["packets"], color=BAR_COLOR)
     for bar, byte_count in zip(bars, table["bytes"]):
-        axis.annotate(_human_bytes(byte_count),
+        axis.annotate(human_bytes(byte_count),
                       (bar.get_x() + bar.get_width() / 2, bar.get_height()),
                       ha="center", va="bottom", fontsize=9)
     axis.set_title("Traffic Volume by Size Class (labels = bytes)")
     axis.set_xlabel("Size class")
     axis.set_ylabel("Packets")
-    _save(fig, path)
+    return _finish(fig, path)
 
 
-def plot_timeline(stats, path):
+def plot_timeline(stats, path=None):
     """Packets per bucket over time with the average line."""
     timeline = stats["timeline"]
     fig, axis = plt.subplots(figsize=(12, 4))
@@ -223,13 +238,20 @@ def plot_timeline(stats, path):
     axis.set_title(f"Packets per {stats['bucket_seconds']:g}s bucket")
     axis.set_xlabel("Seconds since first packet")
     axis.set_ylabel("Packets")
-    _save(fig, path)
+    return _finish(fig, path)
 
 
-def _save(fig, path):
+def _finish(fig, path):
+    """Save the figure to `path` and close it, or return it if path is None.
+
+    Returning the open figure lets the Streamlit dashboard display it.
+    """
     fig.tight_layout()
+    if path is None:
+        return fig
     fig.savefig(path, dpi=config.CHART_DPI)
     plt.close(fig)
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -257,7 +279,7 @@ def _overview_html(stats):
     size_stats = stats["size_stats"]
     items = {
         "Packets": f"{overview['packets']:,}",
-        "Total bytes": f"{overview['bytes']:,} ({_human_bytes(overview['bytes'])})",
+        "Total bytes": f"{overview['bytes']:,} ({human_bytes(overview['bytes'])})",
         "Start": str(overview["start"]),
         "End": str(overview["end"]),
         "Duration": f"{overview['duration_seconds']} s",
@@ -323,7 +345,7 @@ def _write_html(html_path, source_file, body):
     html_path.write_text(document, encoding="utf-8")
 
 
-def _human_bytes(value):
+def human_bytes(value):
     value = float(value)
     for unit in ("B", "KB", "MB", "GB"):
         if value < 1024:
